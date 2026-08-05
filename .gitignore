@@ -2,5 +2,14 @@ node_modules/
 dist/
 .env
 .env.local
+.dev.vars
 *.local
 .DS_Store
+.wrangler/
+
+# The Chi corpus is shared under terms that forbid redistribution, and it is the
+# only surviving server-side copy of the pre-migration sessions. It is referenced
+# by path via CHI_CORPUS_DIR and must never land in this repo — belt and braces in
+# case someone copies it in to "make the tests easier to run".
+chi-eval-corpus/
+*.jsonl
