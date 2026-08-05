@@ -122,6 +122,42 @@ export class UnderlayClient {
     return this.json(`/api/collections/${owner}/${slug}`, { headers: this.headers() })
   }
 
+  /**
+   * Collections owned by one org, including private ones the key can reach.
+   *
+   * Uses the browse endpoint with `mine=true` rather than
+   * `GET /api/accounts/:owner/collections`. Both list the same collections, but the
+   * account endpoint returns a bare array of `{id, slug, name, public, createdAt}` with no
+   * record counts or versions, while browse returns those — and this page is mostly about
+   * counts. `mine=true` means "every org the key's user belongs to", so it needs filtering
+   * down to the one we asked about.
+   */
+  async listOrgCollections(owner: string): Promise<
+    { slug: string; name: string; public: boolean; recordCount: number; latestVersion: string | null }[]
+  > {
+    const res = await this.json<{
+      collections: {
+        slug: string
+        name: string
+        public: boolean
+        ownerSlug: string
+        recordCount?: number
+        latestVersion?: string | null
+      }[]
+    }>(`/api/collections?mine=true&limit=100`, { headers: this.headers() })
+
+    return (res.collections ?? [])
+      .filter((col) => col.ownerSlug === owner)
+      .map((col) => ({
+        slug: col.slug,
+        name: col.name,
+        public: col.public,
+        recordCount: col.recordCount ?? 0,
+        latestVersion: col.latestVersion ?? null,
+      }))
+      .sort((a, b) => a.slug.localeCompare(b.slug))
+  }
+
   async latestVersion(owner: string, slug: string): Promise<{ semver: string } | null> {
     try {
       return await this.json(`/api/collections/${owner}/${slug}/versions/latest`, {
@@ -206,14 +242,13 @@ export class UnderlayClient {
    * Every record in a version, via keyset paging. This is the read side of the
    * round-trip gate: it must see only what any reader of the collection sees.
    */
-  async readAllRecords(
+  async *pageRecords(
     owner: string,
     slug: string,
     version: string,
     opts: { type?: string; pageSize?: number } = {},
-  ): Promise<UnderlayRecord[]> {
+  ): AsyncGenerator<UnderlayRecord[]> {
     const pageSize = opts.pageSize ?? 1_000
-    const out: UnderlayRecord[] = []
     let after: string | undefined
 
     for (;;) {
@@ -231,12 +266,26 @@ export class UnderlayClient {
         headers: this.headers(),
       })
 
-      out.push(...page.records)
-      if (!page.pagination.hasMore || !page.pagination.nextCursor) break
-      if (page.records.length === 0) break
+      if (page.records.length > 0) yield page.records
+      if (!page.pagination.hasMore || !page.pagination.nextCursor) return
+      if (page.records.length === 0) return
       after = page.pagination.nextCursor
     }
+  }
 
+  /**
+   * Every record in a version. Convenience over `pageRecords` for callers that can
+   * hold the whole collection — the round-trip tool, not the Durable Object, which
+   * pages so its memory does not scale with the collection.
+   */
+  async readAllRecords(
+    owner: string,
+    slug: string,
+    version: string,
+    opts: { type?: string; pageSize?: number } = {},
+  ): Promise<UnderlayRecord[]> {
+    const out: UnderlayRecord[] = []
+    for await (const page of this.pageRecords(owner, slug, version, opts)) out.push(...page)
     return out
   }
 }

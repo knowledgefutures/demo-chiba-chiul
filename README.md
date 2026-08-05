@@ -29,7 +29,143 @@ dev.underlay.org, and the round-trip gate passes end to end:
 65/65 sessions round-tripped with nothing lost
 ```
 
-Phase 1 (the surface app) is in progress; Phase 2 (org provisioning, permissions) follows.
+**Phases 1 and 2 closed.** The surface app runs: a Worker + React SPA on `:4700`, a D1 control
+plane, and one SQLite Durable Object that hydrates 9,429 records out of the collections in ~9
+seconds. 39 unit tests and 37 smoke checks pass.
+
+The write path round-trips too. Publishing a layout from the **Team** page reconstructs all 9,429
+records inside the Durable Object and pushes them, and Underlay answers:
+
+```
+POST …/versions/negotiate/…/commit → 409
+  "No changes detected. Version v1.0.0 already has identical content."
+```
+
+That is a stronger result than `0 uploaded` — which only proves the record *bodies* were already
+stored. A 409 here means Underlay hashed the whole version and could not distinguish this
+workspace's reconstruction from the originals, field for field. Two columns exist purely to make
+that true (`pg_escaped`, `trailing_newline`); drop either and it quietly starts re-uploading.
+
+## The surface
+
+Five pages behind a sidebar: **Overview** (cost, models, shape), **Corpus** (every record at
+once), **Sessions**, **Search**, **Underlay** (the org, its collections, publishing). The persona
+switcher sits at the bottom of the sidebar as an account chip — a fixed-position popover, because
+inline it grew the sidebar's scroll height and shoved the chip around as it opened.
+
+The page is called **Underlay**, not "Team": it is the side of the app that talks to a specific
+Underlay org, and "Team" named an abstraction rather than what the page does. Collection names, the
+org chip and the sidebar org block all link out to `dev.underlay.org` — which only resolves for
+someone signed in there with access, since every collection is private.
+
+
+```
+Underlay collections (chiba/*, private)
+        │  paged reads — the same API any other consumer would use
+        ▼
+┌── CONTROL PLANE — D1 ────────────────────────────────────┐
+│  workspaces · collections · personas · grants            │
+└──────────────────────────────────────────────────────────┘
+        ▲ persona → grants → what may be sent
+┌── DATA PLANE — one SQLite Durable Object ────────────────┐
+│  sessions · entries · entries_fts · metrics · links      │
+└──────────────────────────────────────────────────────────┘
+        ▼
+   React SPA — dashboards, session explorer, z selector, search
+```
+
+The Durable Object reads **from the collections, not from the corpus**. That makes the surface an
+honest working copy of what was published, exercises the read path like any other consumer, and
+means the deployed Worker needs no transcripts inside it.
+
+### The look: an instrument, not a website
+
+Three decisions carry it, and they live in `src/client/global.css`.
+
+**Radii are 2–3px, never more.** Soft corners are the single strongest "web app" signal. The
+`--radius-*` tokens are all remapped to 2–4px, so even a stray `rounded-xl` cannot round anything;
+the only true circle left in the app is the loading spinner. Bar ends keep the 1–2px the mark spec
+asks for and nothing else does.
+
+**Neutrals are cool and closely spaced.** The previous set was warm paper (`#f9f9f7`), which reads
+editorial. These sit on a slight blue axis with small steps between them, which is what lets borders
+be genuine hairlines rather than visible frames.
+
+**Numbers are mono and tabular.** Stat values, table cells, record counts, session figures. A row of
+stat tiles becomes a column of digits, which is most of the difference between a dashboard and a
+page.
+
+### One colour language, three scales
+
+`src/lib/chi/kinds.ts` classifies every entry by **who is speaking** — human, model, tool, or the
+runtime talking about itself — and every view reads from the same table. A 2px tick in the corpus
+map, a band in a session strip and a bubble in the transcript that share a colour are the same kind
+of thing, which is what makes zooming feel like one continuous view rather than four screens.
+
+Only **three hues** carry identity (blue human, violet model, aqua tool) plus a recessive neutral
+for events. That is a constraint, not a preference: in a dense strip any two marks can end up
+adjacent, which is the palette validator's `--pairs all` case, and three is the most that clears CVD
+separation there. `thinking` shares the model hue and separates by weight instead of taking a fourth
+colour. Validated on the light surface: worst all-pairs CVD ΔE 13.0, worst normal-vision ΔE 16.3.
+Aqua measures 2.74:1 against the surface — below the 3:1 bar — so it never appears without a visible
+label beside it.
+
+Classification was wrong first time in a way worth recording: treating any assistant turn containing
+a `toolCall` as `tool` put 7,678 of 9,299 entries in one bucket, rendered the corpus as a wall of
+green, and collapsed `thinking` to a single entry, because an assistant turn nearly always carries
+reasoning and a call together. Classifying by speaker gives tool 51%, model reasoning 28%, events
+11%, model prose 7%, human **3%** — and that last number is itself the finding.
+
+### Access is a grant table, and it is enforced server-side
+
+`grants` maps a persona to what it may see, using **Chi's own z vocabulary as the permission
+ladder** — because consent and reduction level turn out to be the same axis. "You may read my
+summaries but not my raw logs" is a z ceiling:
+
+| `detail` | Means |
+| --- | --- |
+| `full` | entries at z=0 — the raw session |
+| `reduced` | entries at z≥1 only — summaries, never raw records |
+| `metrics` | Session and Metrics records only — shape and cost, no content |
+| `none` | not visible at all |
+
+Resolution is most-specific-wins, so a source grant can *narrow* a wildcard — which is what makes
+"everyone may see summaries, but User 2 has withheld their sessions" expressible. Within one
+specificity the more permissive level wins, so adding a grant can never silently remove access.
+
+The four seeded personas produce genuinely different views of the same data:
+
+| Persona | Sessions visible | Openable | Private `cwd` | Search |
+| --- | --- | --- | --- | --- |
+| User 1 | 65 of 65 | 10 (own) | own only | own sources only |
+| User 2 | 65 of 65 | 20 (own) | own only | own sources only |
+| Team steward | **45 of 65** | 45 metadata, 0 raw | never | nothing |
+| Outsider | 65 of 65, no titles | 0 | never | nothing |
+| Chi core | 65 of 65 | 65 | everywhere | everything |
+
+`Chi core` is the default, and the reason it exists is a mistake worth recording. The demo used to
+open as `Outsider` — least privilege, correct for a product — which made every list empty and every
+search return nothing. The access model working exactly as designed, and indistinguishable from a
+broken app. A demo should open on the view that shows the data; the restricted personas are now
+something you deliberately switch *to* in order to watch access bite.
+
+Two rules keep this from being theatre. Filtering happens **in the Worker** — a persona that may not
+read a session never receives it, rather than receiving it and having the UI hide it. And what is
+withheld is **named and counted** rather than silently dropped, because a dashboard that quietly
+excludes a third of the team reads as a complete picture when it is not.
+
+Search is gated at `full` rather than `reduced`: a snippet is raw session text, so letting a
+summaries-only persona search raw entries would route straight around their own grant. Provisioning
+is gated on full access to *every* source, because publishing copies everyone's records into a new
+collection and a restricted persona must not be able to launder data it cannot read.
+
+### The gate is a curtain, and says so
+
+One shared `DEMO_PASSWORD` in an HMAC-signed cookie, no KF Auth. It **fails closed** — an
+environment with no password set is locked, not open, on the same principle as Ask's `ADMIN_ONLY`.
+The persona is a signed cookie value rather than a client-supplied header, so the client cannot
+claim a persona it was not given; but anyone with the link may *choose* any persona, and both the
+landing page and `GET /api/me` say so outright.
 
 ## The data model
 
@@ -141,10 +277,39 @@ surviving server-side copy of the pre-migration sessions. So:
 
 ```sh
 pnpm install
-pnpm check                        # tsc + oxlint + vitest
+cp .env.example .dev.vars         # then fill in the three values below
+pnpm db:migrate:local             # apply control-plane migrations to local D1
+pnpm dev                          # vite build + wrangler dev on :4700
+```
 
+`.dev.vars` needs three things:
+
+| Variable | For |
+| --- | --- |
+| `UNDERLAY_API_KEY` | read access to the private `chiba` collections |
+| `DEMO_PASSWORD` | the shared gate password. Unset means nobody gets in |
+| `SESSION_SECRET` | signs the gate and persona cookies |
+
+Then open http://localhost:4700, enter the password, and press **Hydrate from Underlay** on the
+overview (or `POST /api/workspace/hydrate`). It reads ~9,429 records in about 9 seconds.
+
+Port note: this runs on **4700**. 4300 is Hot, 4400 is Ask, and 4500/4600 were already taken.
+
+```sh
+pnpm check                        # tsc + oxlint + vitest + vite build
+node tools/smoke.mjs              # every route, plus the access model per persona
+```
+
+`smoke.mjs` exists because a refactor once silently deleted seven route registrations in Hot and
+every other gate passed — tsc does not typecheck route strings and the Worker still boots. It also
+asserts the grants behaviour per persona, since "the grant table is right" and "the API applies it"
+are different claims and only the second matters.
+
+### The Phase 0 tools
+
+```sh
 export CHI_CORPUS_DIR=../../proj_kf-meta/planning/local/demos/chiba-chi/chi-eval-corpus
-pnpm test                         # the offline gate, over the real corpus
+pnpm test                         # the offline round-trip gate, over the real corpus
 
 node tools/ingest.ts --dry-run                    # what would be created
 node tools/ingest.ts --dry-run --grouping repo
@@ -175,6 +340,106 @@ manifest of hashes, and hash negotiation reports the far side already has everyt
 grouping costs one manifest. A collection is the unit of *access control, versioning and identity*,
 not a storage bucket. That is what makes "per person **and** per repo" free rather than a tradeoff.
 
+## The write side: a fast layer in front of Underlay
+
+Underlay versions are **commits** — a manifest plus a version hash — which suits batches and
+not per-turn appends. So chiul buffers: a session writes here at app latency, the writes land
+in the Durable Object immediately, and Underlay receives **one version per flush interval**
+instead of one version per turn.
+
+```
+Chi session ──POST /api/ingest──▶  pending (Durable Object)  ──every N minutes──▶  Underlay
+              Bearer <write token>        instant                                  one version
+```
+
+| Surface | Auth | Who |
+| --- | --- | --- |
+| `POST /api/ingest` | `Authorization: Bearer <write token>` | machines |
+| `GET/POST /api/ingest/{status,tokens,policy,flush}` | demo gate + full read access | operators |
+
+The machine endpoint **refuses the demo cookie**. If it accepted one, any page a viewer visited
+could write session logs on their behalf. And minting a write token needs the same full read
+access that publishing does, because a token can append to any collection this workspace
+publishes — a restricted persona must not be able to hand out a key that writes to a source it
+cannot read. Both halves are asserted in `tools/smoke.mjs`.
+
+Three properties worth knowing:
+
+- **Writes are idempotent** by `sessionId:entryId`. A client that replays a session after a
+  reconnect adds nothing, which matters because Chi's duplicates come from replication rather
+  than concurrency — so it is safe to point two machines at the same endpoint.
+- **A flush and a re-publish are the same operation.** Buffered entries join the main tables,
+  then the layout is published; content addressing means only genuinely new records travel. A
+  measured flush of one 4-entry session into the 9,429-record collection uploaded **1 record**
+  and produced `v1.1.0`.
+- **Tokens are stored hashed**, with only a display prefix kept, and returned exactly once.
+- **The buffer survives a schema rebuild.** `pending` is the one table excluded from the
+  drop-and-rebuild on `SCHEMA_VERSION` mismatch: everything else is a projection that
+  `hydrate()` can rebuild, but buffered writes are data a client already handed us.
+
+`autoFlush` is off by default. When on, a cron (`*/5 * * * *`) checks whether the workspace's
+own configured interval has elapsed — the schedule is a floor, the interval is the policy — and
+a failed flush leaves the buffer intact for the next run rather than dropping it.
+
+## Deploying
+
+Nothing here is Cloudflare-specific beyond Workers + D1 + Durable Objects. The full sequence:
+
+```sh
+# 1. Create the real D1 database and put its id in wrangler.jsonc
+npx wrangler d1 create chiba-chiul          # copy the database_id it prints
+#    → replace "local-dev-placeholder" in wrangler.jsonc
+
+# 2. Apply migrations to the remote database
+npx wrangler d1 migrations apply chiba-chiul --remote
+
+# 3. Set the three secrets (never in wrangler.jsonc — it is committed)
+npx wrangler secret put UNDERLAY_API_KEY    # read+write on the chiba org
+npx wrangler secret put DEMO_PASSWORD       # the shared gate password
+npx wrangler secret put SESSION_SECRET      # any long random string
+
+# 4. Deploy (builds the SPA, then uploads the Worker, DO and assets)
+pnpm deploy
+
+# 5. Hydrate once — a fresh Durable Object starts empty
+#    Open the deployed URL, enter the password, press "Hydrate from Underlay".
+```
+
+Notes:
+
+- **`database_id` must be replaced.** It is `local-dev-placeholder` today, which works for
+  `--local` and fails on deploy.
+- **The DO migration is already declared** (`new_sqlite_classes: ["Workspace"]`), so the first
+  deploy creates the class. Later renames of that class need a new migration tag.
+- **The cron trigger deploys with the Worker.** It does nothing until `autoFlush` is switched on
+  in the UI.
+- **`APP_URL` should be set to the deployed origin** in `wrangler.jsonc` `vars`, because the
+  ingest panel shows it as the endpoint to write to.
+- A `workers.dev` subdomain is fine for a gated demo; a custom domain is a route, not a rewrite.
+- `compatibility_date` is pinned; bump it and the installed `workerd` together.
+
+### Can the repo be public?
+
+**Yes on secrets — verified, not assumed.** No `.dev.vars`, no `.env`, no `*.jsonl`, and no
+corpus file has ever been committed; the history contains no token-, password- or key-shaped
+string. The corpus is referenced by `CHI_CORPUS_DIR` and `chi-eval-corpus/` plus `*.jsonl` are
+gitignored.
+
+Two categories were in the source and have been removed, because a public repo is a different
+bar from a private one:
+
+- **Real usernames and machine paths** appeared in the anonymisation test's own regex and as a
+  literal expected `cwd`. Both now derive from the corpus at runtime, which is *stronger* as a
+  test — it covers whatever roots the data actually contains — and leaves no identifiers here.
+- **Two session ids** from the private corpus were test fixtures. The tests now locate those
+  records by the property under test (contains a NUL; contains a lone surrogate) instead.
+
+One category is left, and it is the Chi team's call rather than ours: this README and the tests
+describe **their** corpus in some detail — 9,299 records, $368.85 of spend, the model mix, and
+a defect in their exporter. None of it is transcript content, and all of it is useful
+engineering documentation. But it is a description of a private dataset belonging to someone
+else, so ask before making the repo public.
+
 ## Notes for whoever works on this next
 
 - **This demo diverges from `conventions/reference/demos.md`,** which assumes demos are static sites
@@ -195,3 +460,27 @@ not a storage bucket. That is what makes "per person **and** per repo" free rath
   passes through rather than being rejected. And its extra-field check reads only the *top level* of
   `data`, which is why `Entry.entry` can be an unconstrained object and let unknown future record
   types survive without a schema change here.
+- **Never `DELETE FROM` an FTS5 external-content table.** `entries_fts` is a view over `entries`, not
+  a copy, so `DELETE` writes delete-markers for rows that are about to vanish and the next rebuild
+  lands on an index disagreeing with its content table. It surfaces on the *following* hydrate as
+  `SQLITE_CORRUPT_VTAB`, which reads as a disk fault and is not one. Drop the table and
+  `INSERT INTO entries_fts(entries_fts) VALUES('rebuild')` instead.
+- **A `toolCall` content part names its tool in `name`; a `toolResult` message uses `toolName`.**
+  Reading only `toolName` leaves every assistant invocation unlabelled, which made the tool-mix chart
+  silently count tool *results* (4,709) instead of *calls* (4,721) — the same order of magnitude and
+  the wrong thing measured. Tool counts now come from the published `Metrics` records rather than
+  being recomputed here, so the dashboard and the collection cannot drift.
+- **A percentage height needs a parent with a height.** The timeline bars sized by `%` inside
+  content-height columns and the whole chart rendered blank, with no error. `h-full` on the column is
+  load-bearing.
+- **React Compiler is off**, as in Hot and Ask: `@vitejs/plugin-react` v6 transforms with oxc and
+  dropped the `babel` option, so the compiler goes through `reactCompilerPreset` now. It is an
+  optimization, not a correctness requirement.
+- **`position: sticky` creates a stacking context.** The sidebar is sticky, so the persona
+  popover's `z-50` only competed *inside* the sidebar; `<main>` painted later in DOM order and the
+  corpus page's own sticky session labels bled straight through the popover. The fix is a `z-30` on
+  the `<aside>` itself, which is the kind of thing that looks like a stray utility class and is
+  load-bearing.
+- **`wrangler types` picks up secret names from `.dev.vars`.** Without an entry there, `c.env.X` is a
+  type error even though it works at runtime. And appending to a `.dev.vars` with no trailing newline
+  glues your variable onto the previous one.

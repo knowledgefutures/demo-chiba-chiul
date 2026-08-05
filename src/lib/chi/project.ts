@@ -20,8 +20,8 @@ export type UnderlayRecord = { id: string; type: string; data: Record<string, un
 /**
  * A source is a *machine*, not a person. Three distinct `cwd` roots appear in the
  * corpus and 29 of 65 sessions have no `cwd` at all, so "who" is not knowable from
- * the data. `/home/exedev/chi` is a shared dev.exe environment either participant
- * could have been using.
+ * the data. One of the three roots is a shared build environment either participant
+ * could have been working in, so even the machine does not imply a person.
  *
  * Hence neutral labels until we get the real mapping from the Chi team. Guessing
  * would put a name on the wrong person's transcript.

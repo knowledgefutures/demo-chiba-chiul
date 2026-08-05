@@ -47,6 +47,25 @@ function countNuls(jsonl: string): number {
   return n
 }
 
+/** True when any parsed string holds an unpaired surrogate — not representable as UTF-8. */
+function hasLoneSurrogate(jsonl: string): boolean {
+  let found = false
+  const walk = (v: unknown): void => {
+    if (found) return
+    if (typeof v === 'string') {
+      for (const ch of v) {
+        if (ch.length === 1) {
+          const c = ch.charCodeAt(0)
+          if (c >= 0xd800 && c <= 0xdfff) found = true
+        }
+      }
+    } else if (Array.isArray(v)) v.forEach(walk)
+    else if (typeof v === 'object' && v !== null) Object.values(v).forEach(walk)
+  }
+  for (const line of jsonl.split('\n')) if (line.length > 0) walk(JSON.parse(line))
+  return found
+}
+
 /** What the store does to `data` on the way in: parse, normalize, forget ordering. */
 function throughJsonb(records: readonly UnderlayRecord[]): UnderlayRecord[] {
   return records.map((r) => ({
@@ -139,8 +158,14 @@ suite('chi corpus', () => {
     expect([...bySource.keys()].sort()).toEqual(['Unattributed', 'User 1', 'User 2', 'User 3'])
     expect(bySource.get('Unattributed')).toBe(29)
     expect([...bySource.values()].reduce((a, b) => a + b)).toBe(65)
+    // The forbidden strings are derived from the corpus rather than written here: the test
+    // gets strictly stronger (it covers whatever roots the data actually contains) and this
+    // file carries no real usernames or paths, which matters if the repo is ever public.
+    const realSegments = [...sourceMap.keys()].flatMap((root) => root.split('/').filter(Boolean))
     for (const key of bySource.keys()) {
-      expect(key).not.toMatch(/gszep|Steffen|exedev/i)
+      for (const segment of realSegments) {
+        expect(key.toLowerCase()).not.toContain(segment.toLowerCase())
+      }
     }
   })
 
@@ -167,13 +192,17 @@ suite('chi corpus', () => {
 
     const nullIdRows = index.sessions.filter((s) => s.sessionId === null)
     expect(nullIdRows.length).toBe(11)
-    // Same 11 files, and every one of them still carries its cwd in the header.
+    // Every one still carries a cwd in its header, and all 11 share the same one — the
+    // machine is identified by that fact, not by naming it in this file.
+    const recovered = new Set<string>()
     for (const row of nullIdRows) {
       const match = files.find((f) => f.file === row.file)!
       const cwd = sessionCwd(parseSession(readFileSync(match.path, 'utf8')).entries)
       expect(row.cwd, row.file).toBeNull()
-      expect(cwd, row.file).toBe('/home/exedev/chi')
+      expect(cwd, row.file).not.toBeNull()
+      recovered.add(cwd!)
     }
+    expect(recovered.size).toBe(1)
   })
 
   /**
@@ -184,9 +213,9 @@ suite('chi corpus', () => {
    * hand-made fixture, and because the encoding has to stay reversible.
    */
   it('escapes the one record Postgres cannot store, reversibly', () => {
-    const target = files.find(
-      (f) => f.file === '019f79ed-fc0e-7d7b-b553-6b0382b12dba.jsonl',
-    )!
+    // Found by the property under test rather than by session id, so no id from a private
+    // corpus is written down here.
+    const target = files.find(({ path }) => countNuls(readFileSync(path, 'utf8')) > 0)!
     const text = readFileSync(target.path, 'utf8')
     const session = parseSession(text)
     const records = projectSession(session, { repo: target.repo, sourceMap })
@@ -225,15 +254,16 @@ suite('chi corpus', () => {
       }
     }
     expect(escaped.length).toBe(2)
-    expect([...new Set(escaped)].sort()).toEqual([
-      '019f79ed-fc0e-7d7b-b553-6b0382b12dba.jsonl',
-      '10224bae-d810-469a-8546-f1eb7808c085.jsonl',
-    ])
+    // Two distinct sessions, for two distinct reasons — a NUL in one, a lone surrogate in
+    // the other. Asserted as a shape, not as two ids from a private corpus.
+    expect(new Set(escaped).size).toBe(2)
   })
 
   /** The lone-surrogate record, whose encoded form must be UTF-8 representable. */
   it('makes the lone-surrogate record encodable as UTF-8', () => {
-    const target = files.find((f) => f.file === '10224bae-d810-469a-8546-f1eb7808c085.jsonl')!
+    const target = files.find(
+      ({ path }) => hasLoneSurrogate(readFileSync(path, 'utf8')) && countNuls(readFileSync(path, 'utf8')) === 0,
+    )!
     const text = readFileSync(target.path, 'utf8')
     const session = parseSession(text)
     const records = projectSession(session, { repo: target.repo, sourceMap })

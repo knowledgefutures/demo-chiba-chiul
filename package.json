@@ -4,22 +4,53 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "vite build && wrangler dev --port 4700",
+    "dev:client": "vite build --watch",
+    "build": "vite build",
+    "deploy": "vite build && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint .",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "tsc --noEmit && oxlint . && vitest run",
+    "check": "tsc --noEmit && oxlint . && vitest run && vite build",
+    "cf-typegen": "wrangler types",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply chiba-chiul --local",
+    "db:migrate:remote": "wrangler d1 migrations apply chiba-chiul --remote",
     "ingest": "node tools/ingest.ts",
-    "roundtrip": "node tools/roundtrip.ts"
+    "roundtrip": "node tools/roundtrip.ts",
+    "smoke": "node tools/smoke.mjs"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.101.4",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.32",
+    "lucide-react": "^1.28.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router": "^8.3.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.1.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.5",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "drizzle-kit": "^0.31.10",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vite": "^8.2.0",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.115.0"
   },
-  "packageManager": "pnpm@10.33.3"
+  "packageManager": "pnpm@10.33.3",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "workerd"]
+  }
 }

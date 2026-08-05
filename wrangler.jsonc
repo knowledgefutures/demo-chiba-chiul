@@ -1,0 +1,54 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chiba-chiul",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-07-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // The React SPA. Only /api/* reaches the Worker; everything else is a static asset.
+  "assets": {
+    "directory": "./dist/client",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+
+  // Control plane: workspaces, collections, personas, grants. One shared database.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "chiba-chiul",
+      "database_id": "ee1f02c6-b04f-4752-92ab-7e5881e67585",
+      "migrations_dir": "src/db/migrations",
+    },
+  ],
+
+  // Data plane: one SQLite Durable Object per workspace, addressed by idFromName.
+  "durable_objects": {
+    "bindings": [{ "name": "WORKSPACE", "class_name": "Workspace" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Workspace"] }],
+
+  // The flush interval. The cron fires every 5 minutes; the handler decides whether the
+  // workspace's own configured interval has actually elapsed, so the schedule is a floor
+  // rather than the policy.
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  "vars": {
+    "APP_URL": "http://localhost:4700",
+    "UNDERLAY_URL": "https://dev.underlay.org",
+    "UNDERLAY_ORG": "chiba",
+    // The per-repo layout holds all 65 sessions in one collection, so hydration reads
+    // one collection rather than four. The per-person layouts cover the same records.
+    "UNDERLAY_PRIMARY_COLLECTION": "chi-henkaku-center-chi",
+    "UNDERLAY_PRIMARY_VERSION": "v1.0.0",
+    // The repo an ingested session belongs to when the writer does not say. It decides
+    // which collection the session publishes into; without it a session cannot publish.
+    "UNDERLAY_DEFAULT_REPO": "henkaku-center/chi",
+  },
+
+  // Secrets come from .dev.vars locally and `wrangler secret put` when deployed:
+  //   UNDERLAY_API_KEY  read access to the private chiba collections
+  //   DEMO_PASSWORD     the shared gate password; unset means nobody gets in
+  //   SESSION_SECRET    signs the gate and persona cookies
+}

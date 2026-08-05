@@ -1,0 +1,118 @@
+@import 'tailwindcss';
+
+/**
+ * Design tokens.
+ *
+ * The target is an instrument, not a website: hairline rules, near-square corners, cool
+ * neutrals, and numbers that line up. Three decisions carry most of that.
+ *
+ * **Radii are 2–3px, never more.** Soft corners are the single strongest "web app" signal;
+ * at 2px a panel reads as a pane in a tool rather than a card on a page.
+ *
+ * **Neutrals are cool and closely spaced.** The previous set was warm paper (#f9f9f7),
+ * which reads editorial. These sit on a slight blue axis with small steps between them, so
+ * borders can be genuine hairlines instead of visible frames.
+ *
+ * **The three series hues are validated, not chosen.** Blue human, violet model, teal tool
+ * — worst all-pairs CVD ΔE 12.9, worst normal-vision ΔE 15.3, and all three now clear 3:1
+ * against the surface (the previous mint green did not, which cost every appearance a
+ * mandatory adjacent label). Any change to these has to be re-run through the palette
+ * validator, including the neutral surface they sit on.
+ *
+ * Light only, deliberately: a dark mode needs its own steps validated against a dark
+ * surface, and absent beats wrong.
+ */
+@theme {
+  /* Shell — the sidebar. Cool near-black, not a tinted grey. */
+  --color-shell: #14161b;
+  --color-shell-raised: #1d2027;
+  --color-shell-line: #2b2f38;
+  --color-shell-ink: #eceef2;
+  --color-shell-muted: #8d94a2;
+
+  /* Content planes. The page is a shade below the panes, so panes read as raised by 1px. */
+  --color-plane: #f4f5f7;
+  --color-surface: #fbfbfc;
+  --color-raised: #ffffff;
+
+  /* Ink — four steps, closely spaced. Text always wears these, never a series colour. */
+  --color-ink: #101319;
+  --color-ink-2: #4d5462;
+  --color-ink-3: #838b99;
+  --color-line: #e4e6ea;
+  --color-rule: #ccd0d8;
+
+  /* The three series hues. Fixed order, never cycled. Validated as a set. */
+  --color-human: #2a78d6;
+  --color-model: #5b2ea8;
+  --color-tool: #00908a;
+  --color-event: #838b99;
+
+  /* Washes, for fills behind text. Kept very pale so ink stays the contrast carrier. */
+  --color-human-wash: #eef4fd;
+  --color-model-wash: #f2eefa;
+  --color-tool-wash: #e8f6f4;
+
+  --color-accent: #2a78d6;
+  --color-accent-wash: #eef4fd;
+
+  /* Status — reserved, never reused as a series colour. */
+  --color-good: #0a7d53;
+  --color-warn: #a9690a;
+  --color-critical: #c0332f;
+  --color-good-wash: #eaf5ef;
+  --color-warn-wash: #fbf3e6;
+  --color-critical-wash: #fceceb;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+
+  /* Near-square. `--radius-lg` exists only so a stray `rounded-lg` cannot round anything. */
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 4px;
+}
+
+@layer base {
+  body {
+    background: var(--color-plane);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  /* Data aligns in columns; a tool should never make you re-read a number. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* The corpus map draws thousands of 2px marks; crisp edges beat smoothing. */
+  .marks {
+    shape-rendering: crispEdges;
+  }
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-rule) transparent;
+  }
+  /* Section eyebrow: the densest way to label a region without spending a heading. */
+  .eyebrow {
+    font-size: 10px;
+    line-height: 1.2;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+  }
+  /* One hairline, used everywhere a region ends. Cheaper than a border on both sides. */
+  .hair-t {
+    box-shadow: inset 0 1px 0 var(--color-line);
+  }
+}
