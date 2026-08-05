@@ -33,13 +33,13 @@ import type { Detail, Me, PersonaSummary, WorkspaceState } from './api.ts'
 import { DetailBadge } from './ui.tsx'
 
 const NAV = [
-  { to: '/', label: 'Overview', icon: LayoutDashboard, hint: 'Cost, models, shape' },
-  { to: '/corpus', label: 'Corpus', icon: Layers, hint: 'All 9,299 records at once' },
+  { to: '/', label: 'Overview', icon: LayoutDashboard, hint: 'Cost, models, tools' },
+  { to: '/corpus', label: 'Corpus', icon: Layers, hint: '9,299 records' },
   { to: '/sessions', label: 'Sessions', icon: ListTree, hint: 'Browse and read' },
-  { to: '/search', label: 'Search', icon: SearchIcon, hint: 'Full text, faceted' },
+  { to: '/search', label: 'Search', icon: SearchIcon, hint: 'Full text' },
   // Named for the system it writes to, not for an abstraction ("Team") that said nothing
   // about what the page does. This is the Underlay side: collections in, versions out.
-  { to: '/underlay', label: 'Underlay', icon: UploadCloud, hint: 'Publish & collections' },
+  { to: '/underlay', label: 'Underlay', icon: UploadCloud, hint: 'Collections & publishing' },
 ]
 
 function initials(label: string): string {

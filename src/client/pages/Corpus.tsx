@@ -213,10 +213,10 @@ export function Corpus() {
           <KindLegend counts={counts} />
           <p className="ml-auto text-[11px] text-ink-3">
             {markW <= 2
-              ? 'Zoom in to resolve individual records'
+              ? 'Zoom in to see individual records'
               : markW >= 9
                 ? 'Each mark is one record — click to open it'
-                : 'Click any mark to open that point in the session'}
+                : 'Click a mark to open it in the session'}
           </p>
         </div>
 
@@ -299,7 +299,7 @@ export function Corpus() {
             </div>
           ) : (
             <p className="text-[11px] text-ink-3">
-              Hover a mark to inspect it. {data.withheld > 0 ? `${data.withheld} sessions withheld from this persona.` : ''}
+              Hover a mark for details. {data.withheld > 0 ? `${data.withheld} sessions withheld from this persona.` : ''}
             </p>
           )}
         </div>
@@ -307,8 +307,8 @@ export function Corpus() {
 
       {data.withheld > 0 ? (
         <Notice kind="warn">
-          {data.withheld} session{data.withheld === 1 ? '' : 's'} are missing from this view
-          entirely — withheld from this persona by grant, not filtered in the browser.
+          {data.withheld} session{data.withheld === 1 ? '' : 's'} withheld from this persona by
+          grant. Not sent to the browser.
         </Notice>
       ) : null}
     </div>

@@ -58,6 +58,11 @@ function requireOperator(c: AppContext): void {
   }
 }
 
+function ingestOrigin(appUrl: string): string {
+  const trimmed = appUrl.trim().replace(/\/+$/, '')
+  return /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`
+}
+
 // --- Machine surface ---
 
 const IngestBody = z.object({
@@ -158,7 +163,9 @@ ingest.get('/status', async (c) => {
   const access = c.get('access')
 
   return c.json({
-    endpoint: `${c.env.APP_URL.replace(/\/+$/, '')}/api/ingest`,
+    // Normalised: `APP_URL` is hand-set per environment and a value without a scheme produced a
+    // curl example that does not run. Assume https for a bare host rather than showing it broken.
+    endpoint: `${ingestOrigin(c.env.APP_URL)}/api/ingest`,
     flushIntervalMinutes: workspace.flushIntervalMinutes,
     autoFlush: workspace.autoFlush,
     lastFlushAt: workspace.lastFlushAt,
@@ -190,10 +197,11 @@ ingest.post('/tokens', async (c) => {
 
   const token = newToken()
   const now = new Date()
+  const id = `tok_${crypto.randomUUID()}`
   await db(c)
     .insert(schema.ingestTokens)
     .values({
-      id: `tok_${crypto.randomUUID()}`,
+      id,
       workspaceId: WORKSPACE_ID,
       label,
       tokenHash: await sha256Hex(token),
@@ -203,8 +211,9 @@ ingest.post('/tokens', async (c) => {
     })
 
   // The only time the token is ever returned. It is stored hashed, so this cannot be
-  // repeated — which is the property that makes the hash worth having.
-  return c.json({ token, label, shownOnce: true }, 201)
+  // repeated — which is the property that makes the hash worth having. The id comes back too so
+  // a caller can revoke exactly what it created.
+  return c.json({ id, token, label, shownOnce: true }, 201)
 })
 
 ingest.post('/tokens/:id/revoke', async (c) => {
@@ -219,6 +228,19 @@ ingest.post('/tokens/:id/revoke', async (c) => {
       ),
     )
   return c.json({ ok: true })
+})
+
+/**
+ * Drop everything buffered without publishing it.
+ *
+ * Exists because the buffer is the one place in this system holding data that has not been
+ * committed anywhere — and test writes accumulate there. Without a discard, running the smoke
+ * suite twice and then pressing Push would publish `smoke-*` sessions into a real collection.
+ */
+ingest.post('/discard', async (c) => {
+  requireOperator(c)
+  const discarded = await workspaceStub(c).discardPending()
+  return c.json({ ok: true, discarded })
 })
 
 ingest.post('/policy', async (c) => {

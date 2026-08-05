@@ -298,8 +298,8 @@ export function Transcript() {
           ) : null}
         </Notice>
         <p className="text-[11px] text-ink-3">
-          That refusal came from the server, not from the interface declining to draw. Switch
-          persona in the sidebar to compare.
+          Refused by the server, not hidden by the interface. Switch persona in the sidebar to
+          compare.
         </p>
       </div>
     )
@@ -334,7 +334,7 @@ export function Transcript() {
         <p className="rounded-[2px] border border-human/25 bg-human-wash px-3 py-1.5 font-mono text-[11px] text-ink-2">
           {session.cwd}
           <span className="ml-2 font-sans text-ink-3">
-            — a <code>private: true</code> field, released because this persona&apos;s grant allows it
+            — a <code>private: true</code> field, shown because this persona&apos;s grant allows it
           </span>
         </p>
       ) : null}
@@ -388,8 +388,7 @@ export function Transcript() {
           <DetailBadge detail={detail.data.detail} />
           {availableZ.length === 1 && availableZ[0] === 0 ? (
             <p className="ml-2 text-[11px] text-ink-3">
-              Only z=0 exists yet — generating real reductions costs model calls and is the next
-              phase. The selector will show them when they exist rather than faking them.
+              Only z=0 exists. Reductions have not been generated yet.
             </p>
           ) : null}
         </div>

@@ -468,6 +468,31 @@ export class Workspace extends DurableObject<Env> {
     return Number(this.sql.exec('SELECT COUNT(*) AS n FROM pending').toArray()[0]?.['n'] ?? 0)
   }
 
+  /**
+   * Drop the buffer without publishing. Returns how many entries were dropped.
+   *
+   * Also removes session rows left with no entries. `accept()` writes a placeholder session row
+   * as soon as a writer names a repo — so discarding only the entries stranded those rows as
+   * phantom sessions with zero records, which then showed up in every count and every list.
+   */
+  discardPending(): number {
+    const n = this.pendingCount()
+    this.sql.exec('DELETE FROM pending')
+    this.sql.exec(`
+      DELETE FROM metrics
+      WHERE scope = 'session'
+        AND scope_id IN (
+          SELECT s.session_id FROM sessions s
+          WHERE NOT EXISTS (SELECT 1 FROM entries e WHERE e.session_id = s.session_id)
+        )
+    `)
+    this.sql.exec(`
+      DELETE FROM sessions
+      WHERE NOT EXISTS (SELECT 1 FROM entries e WHERE e.session_id = sessions.session_id)
+    `)
+    return n
+  }
+
   pendingSummary(): {
     pending: number
     sessions: { sessionId: string; entries: number; oldest: string | null }[]

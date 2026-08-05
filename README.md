@@ -377,6 +377,14 @@ Three properties worth knowing:
   drop-and-rebuild on `SCHEMA_VERSION` mismatch: everything else is a projection that
   `hydrate()` can rebuild, but buffered writes are data a client already handed us.
 
+UI copy across the app is deliberately declarative — "Write your logs", "Push to Underlay" — rather
+than explaining the design. The reasoning lives in this README; the screen says what it does.
+
+An operator-only `POST /api/ingest/discard` drops the buffer without publishing, which exists because
+the buffer is the one place holding uncommitted data: without it, test writes accumulate and the next
+push commits them into a real collection. It also clears session rows left with no entries, since
+`accept()` creates a placeholder row as soon as a writer names a repo.
+
 `autoFlush` is off by default. When on, a cron (`*/5 * * * *`) checks whether the workspace's
 own configured interval has elapsed — the schedule is a floor, the interval is the policy — and
 a failed flush leaves the buffer intact for the next run rather than dropping it.
@@ -386,9 +394,9 @@ a failed flush leaves the buffer intact for the next run rather than dropping it
 Nothing here is Cloudflare-specific beyond Workers + D1 + Durable Objects. The full sequence:
 
 ```sh
-# 1. Create the real D1 database and put its id in wrangler.jsonc
-npx wrangler d1 create chiba-chiul          # copy the database_id it prints
-#    → replace "local-dev-placeholder" in wrangler.jsonc
+# 1. The D1 database already exists and its id is in wrangler.jsonc:
+#      chiba-chiul  ee1f02c6-b04f-4752-92ab-7e5881e67585
+#    For a new environment: npx wrangler d1 create <name>, then paste the id in.
 
 # 2. Apply migrations to the remote database
 npx wrangler d1 migrations apply chiba-chiul --remote
@@ -407,8 +415,13 @@ pnpm deploy
 
 Notes:
 
-- **`database_id` must be replaced.** It is `local-dev-placeholder` today, which works for
-  `--local` and fails on deploy.
+- **Never leave `database_id` as a placeholder**, even for local work. `wrangler d1 …` resolves
+  the database by *name* and keys its local file by the resolved **remote** id, while
+  `wrangler dev` keys local storage by the `database_id` in config. With a placeholder the two
+  land on different local SQLite files, and the dev server reports `no such table: workspaces`
+  against a database the CLI has just migrated successfully. Worse: `wrangler d1 execute --local`
+  will **create the remote database** as a side effect of resolving the name, so a "local" command
+  can provision a cloud resource.
 - **The DO migration is already declared** (`new_sqlite_classes: ["Workspace"]`), so the first
   deploy creates the class. Later renames of that class need a new migration tag.
 - **The cron trigger deploys with the Worker.** It does nothing until `autoFlush` is switched on
@@ -417,6 +430,11 @@ Notes:
   ingest panel shows it as the endpoint to write to.
 - A `workers.dev` subdomain is fine for a gated demo; a custom domain is a route, not a rewrite.
 - `compatibility_date` is pinned; bump it and the installed `workerd` together.
+- **`wrangler dev` reads `.dev.vars` at startup only.** Editing a secret while it runs leaves the
+  old value in memory, and the symptom is a correct password being rejected. Restart after editing.
+- **`wrangler dev` reloads when the built assets change**, and a reload can leave the Durable
+  Object empty — so `pnpm dev` in one terminal plus `vite build` in another will occasionally
+  require re-hydrating. `tools/smoke.mjs` hydrates itself if it finds the workspace empty.
 
 ### Can the repo be public?
 

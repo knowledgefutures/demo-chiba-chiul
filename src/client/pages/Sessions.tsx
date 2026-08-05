@@ -43,7 +43,7 @@ export function Sessions() {
         {visibility.withheld > 0 ? (
           <Notice kind="warn">
             {visibility.withheld} session{visibility.withheld === 1 ? '' : 's'} withheld from this
-            persona entirely — not sent to the browser, not hidden in it.
+            persona. Not sent to the browser.
           </Notice>
         ) : null}
       </Card>
@@ -101,9 +101,8 @@ export function Sessions() {
       </div>
 
       <p className="text-[11px] leading-snug text-ink-3">
-        Machine paths appear only where the persona&apos;s grant allows private fields. They are
-        marked <code className="font-mono">private: true</code> in the published schema, so the
-        collection and this surface agree on what private means.
+        Machine paths are <code className="font-mono">private: true</code> fields in the published
+        schema, shown only where the persona&apos;s grant allows them.
       </p>
     </div>
   )

@@ -66,13 +66,13 @@ const LAYOUTS = [
     id: 'person' as const,
     icon: Users,
     title: 'One collection per person',
-    body: 'The access-control unit. This is the shape that makes “revoke my data” a real operation rather than a policy — and it matches the per-user data authority Chi describes wanting as its federation unit.',
+    body: 'One collection per source. This is the unit access is granted and revoked on.',
   },
   {
     id: 'repo' as const,
     icon: Layers,
     title: 'One collection per repo',
-    body: 'Project memory: every session against a repo in one place. Over the same records as the layout above, so it costs a manifest and nothing else.',
+    body: 'Every session for a repo in one collection. Same records as above, so publishing both costs one extra manifest.',
   },
 ]
 
@@ -102,7 +102,7 @@ export function UnderlayPage() {
         <div>
           <h1 className="text-[15px] font-semibold leading-tight tracking-tight">Underlay</h1>
           <p className="mt-1 text-[11px] text-ink-2">
-            The org these sessions are published to, and how they are grouped.
+            Collections in this org, and how sessions are grouped into them.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -134,10 +134,9 @@ export function UnderlayPage() {
 
       {!data.canManage ? (
         <Notice kind="warn">
-          <strong>{data.persona}</strong> may not provision collections. Publishing copies every
-          source&apos;s records into a new collection, so it needs a persona with full read access —
-          otherwise a restricted persona could launder data it cannot read. Switch to{' '}
-          <strong>Chi core</strong> in the sidebar to publish.
+          <strong>{data.persona}</strong> cannot publish. Publishing copies every source&apos;s
+          records, so it requires read access to all of them. Switch to <strong>Chi core</strong>{' '}
+          in the sidebar.
         </Notice>
       ) : null}
 
@@ -181,21 +180,17 @@ export function UnderlayPage() {
             <div className="mb-3 flex items-start gap-2 rounded-[2px] border border-good/40 bg-good/10 px-3 py-2">
               <Check className="mt-0.5 size-4 shrink-0 text-good" />
               <p className="text-[11px] leading-relaxed">
-                <strong>Nothing changed — Underlay refused the commit.</strong> It hashed everything
-                sent and found the result identical to the version already stored, so there was no
-                new version to make. That is a stronger statement than “no records uploaded”: this
-                workspace reconstructed {last.totalRecords.toLocaleString()} records from its own
-                copy, field for field, and the store could not tell them apart from the originals.
+                <strong>No new version — content identical.</strong> Underlay hashed the{' '}
+                {last.totalRecords.toLocaleString()} records sent and found them identical to the
+                version already stored, so there was nothing to commit.
               </p>
             </div>
           ) : last.totalUploaded === 0 ? (
             <div className="mb-3 flex items-start gap-2 rounded-[2px] border border-good/40 bg-good/10 px-3 py-2">
               <Check className="mt-0.5 size-4 shrink-0 text-good" />
               <p className="text-[11px] leading-relaxed">
-                <strong>Zero records uploaded.</strong> Every record was already stored by content
-                hash, so negotiation asked for nothing and only a new manifest was written. That is
-                the argument for content addressing: a second way of grouping the same sessions
-                costs a version, not a copy.
+                <strong>No records uploaded.</strong> Underlay already held every record by content
+                hash, so only a new manifest was written.
               </p>
             </div>
           ) : (
@@ -307,11 +302,9 @@ export function UnderlayPage() {
           </tbody>
         </table>
         <p className="mt-2 text-[10px] leading-snug text-ink-3">
-          Every collection is private, without exception. Privacy in Underlay is evaluated per
-          collection over globally shared records — so a single public layout would expose every
-          record in the private ones too. Which is also why these links only open for someone
-          signed in to {new URL(data.org.underlayUrl).host} with access to the org: to anyone else
-          a private collection does not exist, and the page 404s.
+          All collections are private. Privacy is per collection over shared records, so one public
+          layout would expose the records in the private ones. These links open only for someone
+          signed in to {new URL(data.org.underlayUrl).host} with access to the org.
         </p>
       </Card>
 

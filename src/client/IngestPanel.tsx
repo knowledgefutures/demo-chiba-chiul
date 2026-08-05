@@ -1,16 +1,16 @@
 /**
- * The write side, on the Overview page.
+ * The write side.
  *
- * This is the thing chiul actually *is*, so it sits on the first screen: point Chi at an
- * endpoint, writes land immediately, and Underlay receives one version per interval instead
- * of one per turn. Underlay versions are commits — a manifest plus a version hash — which
- * suits batches and not per-turn appends, and this is the buffer that makes that difference
- * disappear for the writer.
+ * Underlay versions are commits — a manifest plus a version hash — which suits batches and not
+ * per-turn appends. This panel is the buffer that hides that difference from the writer: point
+ * Chi at the endpoint, writes land immediately, and Underlay gets one version per interval.
  *
- * Everything here is wired. The token is real and hashed at rest, the endpoint accepts real
- * Pi v3 entries, the buffer count is the Durable Object's actual row count, and Flush now
- * performs a real push. Nothing on this panel is a mock-up, because a token that did
- * nothing would be worse than no panel at all.
+ * Everything here is wired: the token is real and hashed at rest, the endpoint accepts real Pi
+ * v3 entries, the buffer count is the Durable Object's row count, and the push is a real push.
+ * A token that did nothing would be worse than no panel.
+ *
+ * UI copy here is deliberately declarative — "Write your logs", "Push to Underlay" — rather than
+ * explaining the design. The reasoning lives in the README; the screen just says what it does.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Clock, Copy, KeyRound, Upload, X } from 'lucide-react'
@@ -106,10 +106,10 @@ export function IngestPanel() {
       title={
         <span className="flex items-center gap-2">
           <Upload className="size-3.5 text-tool" />
-          Write logs here, not to Underlay
+          Write your logs
         </span>
       }
-      subtitle="Sessions write at app latency; Underlay gets one version per interval, not one per turn"
+      subtitle="Buffered here, pushed to Underlay on an interval"
       action={
         <div className="flex items-center gap-1.5">
           <span className="font-mono text-[11px] tabular-nums text-ink-3">
@@ -120,7 +120,7 @@ export function IngestPanel() {
             disabled={!data.canManage || flush.isPending || data.buffer.pending === 0}
           >
             <Upload className={`size-3.5 ${flush.isPending ? 'animate-pulse' : ''}`} />
-            Flush now
+            Push to Underlay
           </Button>
         </div>
       }
@@ -142,10 +142,8 @@ export function IngestPanel() {
   -d '{"sessionId":"019f…","entries":[{"entry":{"type":"message","id":"a1",…}}]}'`}
             </pre>
             <p className="mt-1 text-[10px] leading-snug text-ink-3">
-              Portable Pi v3 entries, in file order. Idempotent by{' '}
-              <code className="font-mono">sessionId:entryId</code>, so a replay after a reconnect
-              adds nothing — which matters because Chi&apos;s duplicates come from replication, not
-              concurrency.
+              Portable Pi v3 entries, in file order. Deduplicated by{' '}
+              <code className="font-mono">sessionId:entryId</code>, so replaying a session is safe.
             </p>
           </div>
 
@@ -166,8 +164,7 @@ export function IngestPanel() {
                 </div>
                 <Copyable text={minted.token} className="mt-1.5 w-full" />
                 <p className="mt-1 text-[10px] leading-snug text-ink-2">
-                  Copy it now. Only the hash is stored, so this is the one and only time it can be
-                  shown.
+                  Copy it now — only the hash is stored, so it cannot be shown again.
                 </p>
               </div>
             ) : null}
@@ -218,8 +215,7 @@ export function IngestPanel() {
               </form>
             ) : (
               <p className="text-[10px] text-ink-3">
-                {data.persona} may not mint a write token — it could append to any collection this
-                workspace publishes.
+                {data.persona} cannot create write tokens. Requires read access to every source.
               </p>
             )}
           </div>
@@ -227,7 +223,7 @@ export function IngestPanel() {
 
         <div className="space-y-2 lg:border-l lg:border-line lg:pl-3">
           <div>
-            <p className="eyebrow mb-1">Commit interval</p>
+            <p className="eyebrow mb-1">Push interval</p>
             <div className="flex flex-wrap gap-1">
               {INTERVALS.map((m) => (
                 <button
@@ -253,13 +249,13 @@ export function IngestPanel() {
                 onChange={(e) => policy.mutate({ autoFlush: e.target.checked })}
                 className="accent-[var(--color-accent)]"
               />
-              Commit automatically
+              Push automatically
             </label>
             <p className="mt-1 flex items-start gap-1 text-[10px] leading-snug text-ink-3">
               <Clock className="mt-px size-3 shrink-0" />
               {data.lastFlushAt
-                ? `Last commit ${new Date(data.lastFlushAt).toISOString().slice(0, 16).replace('T', ' ')}`
-                : 'No commit yet'}
+                ? `Last push ${new Date(data.lastFlushAt).toISOString().slice(0, 16).replace('T', ' ')}`
+                : 'Not pushed yet'}
             </p>
           </div>
 
@@ -277,8 +273,8 @@ export function IngestPanel() {
             </div>
           ) : (
             <p className="text-[10px] leading-snug text-ink-3">
-              The buffer is empty. Records written here are held until the next commit, then pushed
-              — and because records are content-addressed, a commit uploads only what is new.
+              Buffer empty. Writes are held here until the next push, which uploads only records
+              Underlay does not already have.
             </p>
           )}
         </div>
@@ -287,8 +283,8 @@ export function IngestPanel() {
       {flush.data ? (
         <div className="mt-2">
           <Notice>
-            Committed. {flush.data.uploaded === 0
-              ? 'Nothing uploaded — every record was already stored by content hash.'
+            Pushed. {flush.data.uploaded === 0
+              ? 'No records uploaded — Underlay already had all of them.'
               : `${flush.data.uploaded.toLocaleString()} records uploaded.`}
           </Notice>
         </div>

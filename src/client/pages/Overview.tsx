@@ -77,13 +77,11 @@ function HydrateCard({ state }: { state: WorkspaceState }) {
   })
 
   return (
-    <Card title="Nothing hydrated yet">
+    <Card title="No sessions loaded">
       <p className="text-[11px] leading-relaxed text-ink-2">
-        This workspace reads from the <code className="font-mono">{state.workspace.orgSlug}</code> org
-        on <code className="font-mono">{new URL(state.workspace.underlayUrl).host}</code>. It pulls
-        the collections through the ordinary paged read API — the same one any other consumer would
-        use — so what you see here is a working copy of what was published, not a second read of the
-        source files.
+        Load the collections from the <code className="font-mono">{state.workspace.orgSlug}</code> org
+        on <code className="font-mono">{new URL(state.workspace.underlayUrl).host}</code>. Reads
+        through the public paged API, so this holds a working copy of what was published.
       </p>
       <div className="mt-3">
         <Button variant="primary" onClick={() => hydrate.mutate()} disabled={hydrate.isPending}>
@@ -92,7 +90,7 @@ function HydrateCard({ state }: { state: WorkspaceState }) {
           ) : (
             <Database className="size-3.5" />
           )}
-          {hydrate.isPending ? 'Reading ~9,400 records…' : 'Hydrate from Underlay'}
+          {hydrate.isPending ? 'Loading ~9,400 records…' : 'Load from Underlay'}
         </Button>
       </div>
     </Card>
@@ -127,14 +125,14 @@ export function Overview() {
   return (
     <div className="space-y-2">
       <PageHeader
-        title={`${s.totals.sessions} sessions of real agent work`}
-        subtitle={`Recorded across ${s.bySource.length} sources over ${days.length} days, published as content-addressed Underlay collections.`}
+        title="Chi session corpus"
+        subtitle={`${s.totals.sessions} sessions · ${s.bySource.length} sources · ${days.length} days · published as Underlay collections`}
         action={
           <Link
             to="/corpus"
             className="inline-flex items-center gap-1.5 rounded-[2px] border border-line bg-surface px-2 py-[5px] text-[11px] font-medium hover:border-rule hover:bg-plane"
           >
-            See every record at once
+            See all records
             <ArrowRight className="size-3.5" />
           </Link>
         }
@@ -159,7 +157,7 @@ export function Overview() {
         <Stat
           label="Tool invocations"
           value={fmtCompact(s.byTool.reduce((n, r) => n + r.calls, 0))}
-          hint="from the published Metrics records"
+          hint="from Metrics records"
           tone="tool"
         />
         <Stat
@@ -169,12 +167,10 @@ export function Overview() {
         />
       </div>
 
-      <IngestPanel />
-
       <div className="grid gap-3 lg:grid-cols-2">
         <Card
-          title="When the work happened"
-          subtitle={`Sessions per day, shared scale · peak ${dayMax} in one day`}
+          title="Sessions per day"
+          subtitle={`Shared scale · peak ${dayMax} in one day`}
         >
           <div className="space-y-1.5">
             {s.bySource.map((source) => (
@@ -195,19 +191,19 @@ export function Overview() {
             ))}
           </div>
           <p className="mt-2 text-[10px] leading-snug text-ink-3">
-            A source is a recording machine, not a person: one root is a shared environment, and 29
-            of the 65 sessions carry no working directory at all.
+            A source is a recording machine, not a person. 29 sessions carry no working directory
+            and are unattributed.
           </p>
         </Card>
 
-        <Card title="Tool mix" subtitle="What the agents actually spent their calls on">
+        <Card title="Tool calls" subtitle="By tool, across all sessions">
           <Bars
             rows={aggregate(s.byTool, (r) => r.toolName, (r) => r.calls).slice(0, 11)}
             tone="var(--color-tool)"
           />
         </Card>
 
-        <Card title="Models" subtitle="Assistant messages by the model that produced them">
+        <Card title="Models" subtitle="Assistant messages per model">
           <Bars
             rows={aggregate(s.byModel, (r) => r.model, (r) => r.entries)}
             format={(n) => `${n.toLocaleString()}`}
@@ -215,7 +211,7 @@ export function Overview() {
           />
         </Card>
 
-        <Card title="By source" subtitle="Sessions, records and spend per machine">
+        <Card title="By source" subtitle="Per recording machine">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b border-line text-left text-ink-3">
@@ -240,6 +236,8 @@ export function Overview() {
           </table>
         </Card>
       </div>
+
+      <IngestPanel />
     </div>
   )
 }

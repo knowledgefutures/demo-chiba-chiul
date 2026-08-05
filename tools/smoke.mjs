@@ -36,7 +36,14 @@ function check(name, ok, detail = '') {
   }
 }
 
-/** Cookie jar just rich enough for two signed cookies. */
+/**
+ * Re-unlock before each phase rather than carrying one cookie through the whole run.
+ *
+ * `wrangler dev` reloads whenever the built assets change, and a long single-cookie run
+ * produced different failures on each invocation — 401s appearing partway through a loop of
+ * routes that had just passed. A smoke test that is order- and state-dependent reports on
+ * itself rather than on the server, so each phase now starts from a fresh unlock.
+ */
 function jar() {
   const cookies = new Map()
   return {
@@ -67,6 +74,14 @@ async function call(cookies, path, init = {}) {
 }
 
 console.log(`smoke: ${BASE}`)
+
+/** Unlock a fresh jar. Cheap, and it makes each phase independent of the last. */
+async function unlockedJar() {
+  const c = jar()
+  const res = await call(c, '/api/gate', { method: 'POST', body: JSON.stringify({ password }) })
+  if (res.status !== 200) throw new Error(`could not unlock: ${res.status}`)
+  return c
+}
 
 // --- Unauthenticated surface ---
 console.log('\ngate')
@@ -111,7 +126,14 @@ check(
   `got ${me.body?.persona?.label}`,
 )
 
-const workspace = await call(cookies, '/api/workspace')
+let workspace = await call(cookies, '/api/workspace')
+if (workspace.status === 200 && workspace.body?.sessions === 0) {
+  // Self-hydrating: every access assertion below needs sessions to reason about, and a
+  // fresh Durable Object starts empty. Better to fill it than to fail 20 checks.
+  console.log('  ..   workspace empty — hydrating from Underlay first')
+  await call(cookies, '/api/workspace/hydrate', { method: 'POST', body: '{}' })
+  workspace = await call(cookies, '/api/workspace')
+}
 check(
   'GET /api/workspace is hydrated',
   workspace.status === 200 && workspace.body?.sessions > 0,
@@ -125,11 +147,11 @@ for (const path of [
   '/api/corpus',
   '/api/team',
 ]) {
-  const res = await call(cookies, path)
+  const res = await call(await unlockedJar(), path)
   check(`GET ${path} is 200`, res.status === 200, `got ${res.status}`)
 }
 
-const corpusRes = await call(cookies, '/api/corpus')
+const corpusRes = await call(await unlockedJar(), '/api/corpus')
 check(
   'GET /api/corpus returns every session as kind marks',
   corpusRes.body?.sessions?.length > 0 &&
@@ -145,7 +167,7 @@ check(
   corpusRes.body.sessions.every((s) => /^[hmtke]+$/.test(s.marks)),
 )
 
-const searchRes = await call(cookies, '/api/stats/search?q=federation')
+const searchRes = await call(await unlockedJar(), '/api/stats/search?q=federation')
 check(
   'search returns hits and facets for a term known to match',
   searchRes.body?.results?.length > 0 && searchRes.body.facets.kinds.length > 0,
@@ -156,7 +178,7 @@ check(
   searchRes.body.results.some((h) => h.snippet.includes('⟦')),
 )
 
-const notFound = await call(cookies, '/api/nope')
+const notFound = await call(await unlockedJar(), '/api/nope')
 check('unknown API path is a JSON 404', notFound.status === 404 && !!notFound.body?.error)
 
 // --- Access model, per persona ---
@@ -164,8 +186,7 @@ console.log('\naccess')
 const personas = new Map(me.body.personas.map((p) => [p.label, p.id]))
 
 async function as(label) {
-  const c = jar()
-  await call(c, '/api/gate', { method: 'POST', body: JSON.stringify({ password }) })
+  const c = await unlockedJar()
   const res = await call(c, '/api/me/persona', {
     method: 'POST',
     body: JSON.stringify({ personaId: personas.get(label) }),
@@ -235,7 +256,7 @@ check(
   `got ${stewardProvision.status}`,
 )
 
-const coreTeam = await call(cookies, '/api/team')
+const coreTeam = await call(await unlockedJar(), '/api/team')
 check('a full-access persona may manage the org', coreTeam.body.canManage === true)
 
 const asOutsider = await as('Outsider')
@@ -252,10 +273,11 @@ check(
 
 // --- The write side ---
 console.log('\ningest')
+const opJar = await unlockedJar()
 
 // The machine endpoint must not accept the demo cookie: if it did, any page a viewer
 // visited could write session logs on their behalf.
-const cookieWrite = await call(cookies, '/api/ingest', {
+const cookieWrite = await call(opJar, '/api/ingest', {
   method: 'POST',
   body: JSON.stringify({ sessionId: 's', entries: [{ entry: { type: 'message' } }] }),
 })
@@ -272,7 +294,7 @@ const badToken = await call(jar(), '/api/ingest', {
 })
 check('an unknown write token is refused', badToken.status === 401, `got ${badToken.status}`)
 
-const status = await call(cookies, '/api/ingest/status')
+const status = await call(opJar, '/api/ingest/status')
 check(
   'GET /api/ingest/status reports the endpoint and buffer',
   status.status === 200 && typeof status.body.endpoint === 'string' && status.body.buffer !== undefined,
@@ -290,7 +312,7 @@ const stewardFlush = await call(asSteward, '/api/ingest/flush', { method: 'POST'
 check('flushing is refused for a restricted persona', stewardFlush.status === 403)
 
 // A real token, a real write, and the idempotency guarantee the endpoint advertises.
-const mint = await call(cookies, '/api/ingest/tokens', {
+const mint = await call(opJar, '/api/ingest/tokens', {
   method: 'POST',
   body: JSON.stringify({ label: `smoke-${Date.now().toString(36)}` }),
 })
@@ -324,10 +346,33 @@ check(
   `accepted=${replay.body?.accepted} duplicates=${replay.body?.duplicates}`,
 )
 
-const revoke = await call(cookies, `/api/ingest/tokens/${status.body.tokens[0]?.id ?? 'none'}/revoke`, {
+// Revoke the token this run created, not whichever was newest beforehand.
+const revoke = await call(opJar, `/api/ingest/tokens/${mint.body.id}/revoke`, {
   method: 'POST',
 })
 check('a token can be revoked', revoke.status === 200)
+
+/**
+ * Clean up. The buffer is the one place holding uncommitted data, so leaving `smoke-*` sessions
+ * in it means the next push publishes test records into a real collection.
+ */
+const discard = await call(opJar, '/api/ingest/discard', { method: 'POST' })
+check('the buffer can be discarded, so test writes never publish', discard.status === 200)
+const after = await call(opJar, '/api/ingest/status')
+check('the buffer is empty after cleanup', after.body.buffer.pending === 0, `pending=${after.body?.buffer?.pending}`)
+
+// Discarding must not leave phantom sessions behind: `accept()` writes a placeholder session row
+// as soon as a repo is named, and those rows outlived their entries until discard cleaned them up.
+const sessionsAfter = await call(await unlockedJar(), '/api/sessions')
+check(
+  'no phantom zero-record sessions survive a discard',
+  sessionsAfter.body.sessions.every((s) => s.entryCount > 0),
+  `${sessionsAfter.body.sessions.filter((s) => s.entryCount === 0).length} with zero records`,
+)
+check(
+  'the token this run created is no longer active',
+  (await call(opJar, '/api/ingest/status')).body.tokens.find((t) => t.id === mint.body.id)?.revoked === true,
+)
 
 console.log(`\n${checks - failures}/${checks} checks passed`)
 process.exit(failures > 0 ? 1 : 0)

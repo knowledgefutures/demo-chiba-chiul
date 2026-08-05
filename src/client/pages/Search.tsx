@@ -130,7 +130,7 @@ export function Search() {
       <header className="border-b border-line pb-2.5">
         <h1 className="text-[15px] font-semibold leading-tight tracking-tight">Search</h1>
         <p className="mt-1 text-[11px] text-ink-2">
-          Full text across every record this persona may read raw.
+          Records this persona can read raw.
         </p>
       </header>
 
@@ -139,7 +139,7 @@ export function Search() {
         <input
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
-          placeholder="Search 9,299 records…"
+          placeholder="Search session text…"
           autoFocus
           className="w-full bg-transparent text-sm outline-none placeholder:text-ink-3"
         />
@@ -152,7 +152,7 @@ export function Search() {
       </label>
 
       {query.trim().length < 2 ? (
-        <Card title="Try one of these" subtitle="Terms that return something in this corpus">
+        <Card title="Suggested terms" subtitle="Known to return results in this corpus">
           <div className="flex flex-wrap gap-1.5">
             {SUGGESTED.map((term) => (
               <button
@@ -243,7 +243,7 @@ export function Search() {
               ) : null}
             </Card>
 
-            <Card title="What is searchable" subtitle="Search reads raw records">
+            <Card title="What is searchable" subtitle="Requires raw-record access">
               <ul className="space-y-1">
                 {data.detailBySource.map((row) => (
                   <li key={row.source} className="flex items-center gap-1.5 text-[11px]">

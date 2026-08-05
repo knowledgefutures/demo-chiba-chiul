@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "chiba-chiul",
+  "name": "demo-chiba-chiul",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-07-29",
   "compatibility_flags": ["nodejs_compat"],
@@ -35,7 +35,7 @@
   "triggers": { "crons": ["*/5 * * * *"] },
 
   "vars": {
-    "APP_URL": "http://localhost:4700",
+    "APP_URL": "demo-chiba-chiul.knowledgefutures.org",
     "UNDERLAY_URL": "https://dev.underlay.org",
     "UNDERLAY_ORG": "chiba",
     // The per-repo layout holds all 65 sessions in one collection, so hydration reads
