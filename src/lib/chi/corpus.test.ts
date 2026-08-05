@@ -75,12 +75,33 @@ function throughJsonb(records: readonly UnderlayRecord[]): UnderlayRecord[] {
   }))
 }
 
+/**
+ * Vitest evaluates the body of a `describe.skip` — it collects the tests, then marks them skipped.
+ * So these fixtures must not throw when the corpus is absent, or a clone with no `CHI_CORPUS_DIR`
+ * fails the suite instead of skipping it. The empty stand-in is never asserted against, because
+ * every test that reads it is skipped in exactly that case.
+ */
+function loadFixtures(d: string) {
+  const files = listSessionFiles(d)
+  return {
+    files,
+    index: readIndex(d),
+    sourceMap: buildSourceMap(
+      files.map(({ path }) => sessionCwd(parseSession(readFileSync(path, 'utf8')).entries)),
+    ),
+  }
+}
+
+const fixtures: ReturnType<typeof loadFixtures> = dir
+  ? loadFixtures(dir)
+  : {
+      files: [],
+      index: { sessionCount: 0, approxTokensTotal: 0, sessions: [] },
+      sourceMap: buildSourceMap([]),
+    }
+
 suite('chi corpus', () => {
-  const files = listSessionFiles(dir!)
-  const index = readIndex(dir!)
-  const sourceMap = buildSourceMap(
-    files.map(({ path }) => sessionCwd(parseSession(readFileSync(path, 'utf8')).entries)),
-  )
+  const { files, index, sourceMap } = fixtures
 
   it('finds every session the index declares', () => {
     expect(files.length).toBe(index.sessionCount)

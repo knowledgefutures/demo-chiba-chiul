@@ -51,7 +51,14 @@ app.post('/api/gate', async (c) => {
   const { password } = await readBody(c, z.object({ password: z.string().min(1) }))
   if (!(await unlock(c, password))) {
     if (!gateConfigured(c)) {
-      throw new HttpError(503, 'This deployment has no DEMO_PASSWORD set, so nobody can enter.')
+      // Name the missing piece. A bare 503 on a fresh deploy sends you reading source.
+      const missing = [
+        !c.env.DEMO_PASSWORD ? 'DEMO_PASSWORD' : null,
+        !c.env.SESSION_SECRET || c.env.SESSION_SECRET.length < 16 ? 'SESSION_SECRET (16+ chars)' : null,
+      ].filter(Boolean)
+      throw new HttpError(503, `This deployment is missing ${missing.join(' and ')}, so nobody can enter.`, {
+        hint: 'Set it with `wrangler secret put <NAME>` and redeploy.',
+      })
     }
     throw new HttpError(401, 'Incorrect password')
   }

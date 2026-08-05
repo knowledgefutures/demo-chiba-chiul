@@ -61,12 +61,27 @@ async function verify(secret: string, signed: string | undefined): Promise<strin
 }
 
 /**
- * Fails closed. An environment with no `DEMO_PASSWORD` is locked, not open — the same
+ * Fails closed. An environment missing either secret is locked, not open — the same
  * principle as Ask's `ADMIN_ONLY`, and for the same reason: the failure mode of a
  * mis-set variable should be "nobody gets in", never "everybody does".
+ *
+ * `SESSION_SECRET` is checked alongside the password, and that is the load-bearing half.
+ * Without it, `hmac()` would key on the string "undefined" and happily sign cookies that
+ * anyone could forge — a deployment that forgot one `wrangler secret put` would look like
+ * it worked while having no gate at all. A minimum length is required for the same reason:
+ * a one-character secret is not a secret.
  */
+const MIN_SECRET_LENGTH = 16
+
 export function gateConfigured(c: Context<AppEnv>): boolean {
-  return typeof c.env.DEMO_PASSWORD === 'string' && c.env.DEMO_PASSWORD.length > 0
+  const password = c.env.DEMO_PASSWORD
+  const secret = c.env.SESSION_SECRET
+  return (
+    typeof password === 'string' &&
+    password.length > 0 &&
+    typeof secret === 'string' &&
+    secret.length >= MIN_SECRET_LENGTH
+  )
 }
 
 export async function isUnlocked(c: Context<AppEnv>): Promise<boolean> {

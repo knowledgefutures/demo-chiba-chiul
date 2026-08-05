@@ -35,7 +35,6 @@
   "triggers": { "crons": ["*/5 * * * *"] },
 
   "vars": {
-    "APP_URL": "demo-chiba-chiul.knowledgefutures.org",
     "UNDERLAY_URL": "https://dev.underlay.org",
     "UNDERLAY_ORG": "chiba",
     // The per-repo layout holds all 65 sessions in one collection, so hydration reads

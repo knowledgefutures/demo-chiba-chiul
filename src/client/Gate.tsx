@@ -55,9 +55,10 @@ export function Gate({ configured, onUnlock }: { configured: boolean; onUnlock: 
           {error ? <p className="text-xs text-warn">{error}</p> : null}
         </form>
       ) : (
-        <p className="mt-6 rounded-[2px] border border-warn/35 bg-warn-wash px-3 py-2 text-xs text-warn">
-          This deployment has no <code className="font-mono">DEMO_PASSWORD</code> set, so nobody can
-          enter. The gate fails closed on purpose: an unconfigured environment is locked, never open.
+        <p className="mt-6 rounded-[2px] border border-warn/35 bg-warn-wash px-3 py-2 text-xs text-ink">
+          This deployment is missing <code className="font-mono">DEMO_PASSWORD</code> or{' '}
+          <code className="font-mono">SESSION_SECRET</code>, so nobody can enter. The gate fails
+          closed: an unconfigured environment is locked, never open.
         </p>
       )}
 

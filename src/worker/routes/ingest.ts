@@ -58,9 +58,17 @@ function requireOperator(c: AppContext): void {
   }
 }
 
-function ingestOrigin(appUrl: string): string {
-  const trimmed = appUrl.trim().replace(/\/+$/, '')
-  return /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`
+/**
+ * The origin this request actually arrived on.
+ *
+ * Derived rather than configured. `APP_URL` had to be hand-set per environment and was wrong in
+ * two ways at once: set to a bare host, so the copyable curl example would not run, and pointing
+ * at a custom domain that had not been attached yet, so it named a host that did not resolve.
+ * The request knows the answer — it is correct on workers.dev, on a custom domain, and locally,
+ * and nobody has to remember to update it.
+ */
+function ingestOrigin(requestUrl: string): string {
+  return new URL(requestUrl).origin
 }
 
 // --- Machine surface ---
@@ -163,9 +171,7 @@ ingest.get('/status', async (c) => {
   const access = c.get('access')
 
   return c.json({
-    // Normalised: `APP_URL` is hand-set per environment and a value without a scheme produced a
-    // curl example that does not run. Assume https for a bare host rather than showing it broken.
-    endpoint: `${ingestOrigin(c.env.APP_URL)}/api/ingest`,
+    endpoint: `${ingestOrigin(c.req.url)}/api/ingest`,
     flushIntervalMinutes: workspace.flushIntervalMinutes,
     autoFlush: workspace.autoFlush,
     lastFlushAt: workspace.lastFlushAt,

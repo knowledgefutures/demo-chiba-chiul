@@ -9,8 +9,11 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const DEFAULT_CORPUS_DIR =
-  '../../proj_kf-meta/planning/local/demos/chiba-chi/chi-eval-corpus'
+/**
+ * Where the corpus is expected if `CHI_CORPUS_DIR` is unset. A sibling directory rather than a
+ * path into anyone's checkout — and gitignored, so putting it here cannot commit it.
+ */
+export const DEFAULT_CORPUS_DIR = './chi-eval-corpus'
 
 export function corpusDir(): string | null {
   const dir = process.env['CHI_CORPUS_DIR'] ?? DEFAULT_CORPUS_DIR
