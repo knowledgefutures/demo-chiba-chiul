@@ -1,0 +1,10 @@
+{
+  "$schema": "https://console.knowledgefutures.org/schemas/kf.project.v2.json",
+  "version": 2,
+  "slug": "chiba-demo-chiul",
+  "name": "Chiba ChiUL (demo)",
+  "account": "chiba",
+
+  // No environments yet: the console registers the project and deploys
+  // nothing. Add "environments" (with at least "production") to deploy.
+}
