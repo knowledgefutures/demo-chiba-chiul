@@ -5,6 +5,10 @@
   "name": "Chiba ChiUL (demo)",
   "account": "chiba",
 
-  // No environments yet: the console registers the project and deploys
-  // nothing. Add "environments" (with at least "production") to deploy.
+  // Deployed outside the console; it links to the first host.
+  "environments": {
+    "production": {
+      "elsewhere": { "hosts": ["demo-chiba-chiul.knowledgefutures.org"] },
+    },
+  },
 }
